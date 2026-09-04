@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1558d6">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <title>ReceiptAnalyzer</title>
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <header>
+        <h1>영수증 전송</h1>
+        <p id="connection" class="muted">연결 정보를 확인하고 있습니다.</p>
+      </header>
+      <input id="picker" type="file" accept="image/jpeg,image/png,image/webp,image/bmp" multiple>
+      <button id="select" class="primary" type="button">영수증 업로드</button>
+      <p class="help">사진을 촬영하거나 사진 보관함에서 여러 장을 선택할 수 있습니다.</p>
+      <div id="summary" class="summary" hidden></div>
+      <ol id="results" class="results"></ol>
+    </section>
+    <details class="settings">
+      <summary>연결 설정</summary>
+      <button id="clear" class="secondary" type="button">연결 정보 삭제</button>
+      <p class="muted">연결이 만료되면 PC 앱에서 모바일 연결 QR을 새로 스캔하십시오.</p>
+    </details>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

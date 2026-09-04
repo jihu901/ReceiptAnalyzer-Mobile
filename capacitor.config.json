@@ -1,0 +1,6 @@
+{
+  "appId": "com.jihu901.receiptanalyzer.mobile",
+  "appName": "ReceiptAnalyzer",
+  "webDir": "dist",
+  "server": {"androidScheme": "https"}
+}
