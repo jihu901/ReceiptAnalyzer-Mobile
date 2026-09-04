@@ -1,0 +1,74 @@
+name: Mobile build and release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: 'npm'}
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: dist}
+      - uses: actions/deploy-pages@v4
+        if: github.ref == 'refs/heads/main'
+        id: deployment
+
+  android-check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: 'npm'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - run: cd android && ./gradlew testDebugUnitTest assembleDebug
+
+  android-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: 'npm'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Restore signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/release.p12
+      - name: Build signed APK
+        env:
+          ANDROID_KEYSTORE_PATH: ../release.p12
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: cd android && ./gradlew testReleaseUnitTest assembleRelease
+      - run: cp android/app/build/outputs/apk/release/app-release.apk ReceiptAnalyzer-Mobile-${{ github.ref_name }}.apk
+      - run: sha256sum ReceiptAnalyzer-Mobile-${{ github.ref_name }}.apk > ReceiptAnalyzer-Mobile-${{ github.ref_name }}.apk.sha256
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ReceiptAnalyzer-Mobile-${{ github.ref_name }}.apk
+            ReceiptAnalyzer-Mobile-${{ github.ref_name }}.apk.sha256
