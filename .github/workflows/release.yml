@@ -14,6 +14,9 @@ permissions:
 jobs:
   web:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,6 +42,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android
+      - run: chmod +x android/gradlew
       - run: cd android && ./gradlew testDebugUnitTest assembleDebug
 
   android-release:
@@ -54,6 +58,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npx cap sync android
+      - run: chmod +x android/gradlew
       - name: Restore signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
