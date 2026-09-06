@@ -14,6 +14,10 @@ function readPairing() {
   const key = fragment.get('key');
   const oneTimePairing = fragment.get('pairing');
   if (endpoint) {
+    if (oneTimePairing || endpoint !== localStorage.getItem('ra.endpoint')) {
+      localStorage.removeItem('ra.key');
+      localStorage.removeItem('ra.pairing');
+    }
     localStorage.setItem('ra.endpoint', endpoint);
     if (key) localStorage.setItem('ra.key', key);
     if (oneTimePairing) localStorage.setItem('ra.pairing', oneTimePairing);
@@ -113,6 +117,7 @@ function bridgeRequest(fields) {
     iframe.hidden = true;
     const timer = setTimeout(() => finish(new Error('Google Drive 응답 시간이 초과되었습니다. 잠시 후 다시 시도하십시오.')), 90000);
     function onMessage(event) {
+      if (!/^https:\/\/([a-z0-9-]+\.)?script\.googleusercontent\.com$/.test(event.origin) && event.origin !== 'https://script.google.com') return;
       const data = event.data || {};
       if (data.type !== 'receipt-upload-result' || data.requestId !== requestId) return;
       finish(data.ok ? null : new Error(data.error || 'Drive 업로드에 실패했습니다.'), data.result);
