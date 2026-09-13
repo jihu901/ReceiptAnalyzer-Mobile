@@ -7,6 +7,15 @@ const connection = document.querySelector('#connection');
 const summary = document.querySelector('#summary');
 const results = document.querySelector('#results');
 const clearButton = document.querySelector('#clear');
+const previewUrls = new Set();
+let uploading = false;
+
+function clearResults() {
+  results.replaceChildren();
+  for (const url of previewUrls) URL.revokeObjectURL(url);
+  previewUrls.clear();
+}
+window.addEventListener('pagehide', clearResults);
 
 function readPairing() {
   const fragment = new URLSearchParams(location.hash.replace(/^#/, ''));
@@ -14,6 +23,10 @@ function readPairing() {
   const key = fragment.get('key');
   const oneTimePairing = fragment.get('pairing');
   if (endpoint) {
+    if (oneTimePairing || endpoint !== localStorage.getItem('ra.endpoint')) {
+      localStorage.removeItem('ra.key');
+      localStorage.removeItem('ra.pairing');
+    }
     localStorage.setItem('ra.endpoint', endpoint);
     if (key) localStorage.setItem('ra.key', key);
     if (oneTimePairing) localStorage.setItem('ra.pairing', oneTimePairing);
@@ -38,7 +51,7 @@ clearButton.addEventListener('click', () => {
   localStorage.removeItem('ra.key');
   localStorage.removeItem('ra.pairing');
   pairing = {endpoint: '', key: '', oneTimePairing: ''};
-  results.replaceChildren();
+  clearResults();
   summary.hidden = true;
   renderConnection();
 });
@@ -113,6 +126,7 @@ function bridgeRequest(fields) {
     iframe.hidden = true;
     const timer = setTimeout(() => finish(new Error('Google Drive 응답 시간이 초과되었습니다. 잠시 후 다시 시도하십시오.')), 90000);
     function onMessage(event) {
+      if (!/^https:\/\/([a-z0-9-]+-)?script\.googleusercontent\.com$/.test(event.origin) && event.origin !== 'https://script.google.com') return;
       const data = event.data || {};
       if (data.type !== 'receipt-upload-result' || data.requestId !== requestId) return;
       finish(data.ok ? null : new Error(data.error || 'Drive 업로드에 실패했습니다.'), data.result);
@@ -178,7 +192,26 @@ async function allPending() {
 function appendResult(file, state, message, retry) {
   const item = document.createElement('li');
   item.className = `result ${state}`;
-  item.innerHTML = '<strong></strong><p></p>';
+  item.innerHTML = '<div class="result-detail"><strong></strong><p></p></div>';
+  const preview = document.createElement('button');
+  preview.type = 'button';
+  preview.className = 'receipt-preview';
+  preview.setAttribute('aria-label', `${file.name} 사진 크게 보기`);
+  const img = document.createElement('img');
+  const url = URL.createObjectURL(file);
+  previewUrls.add(url);
+  img.src = url; img.alt = `${file.name} 영수증`; img.loading = 'lazy';
+  preview.append(img);
+  preview.addEventListener('click', () => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'photo-dialog';
+    const full = document.createElement('img'); full.src = url; full.alt = img.alt;
+    const close = document.createElement('button'); close.textContent = '닫기'; close.type = 'button';
+    close.addEventListener('click', () => dialog.close());
+    dialog.append(full, close); dialog.addEventListener('close', () => dialog.remove());
+    document.body.append(dialog); dialog.showModal();
+  });
+  item.prepend(preview);
   item.querySelector('strong').textContent = file.name;
   item.querySelector('p').textContent = message;
   if (retry) {
@@ -186,8 +219,8 @@ function appendResult(file, state, message, retry) {
     button.type = 'button';
     button.className = 'retry';
     button.textContent = '재시도';
-    button.addEventListener('click', retry);
-    item.append(button);
+    button.addEventListener('click', () => { if (!uploading) retry(); });
+    item.querySelector('.result-detail').append(button);
   }
   results.append(item);
 }
@@ -195,7 +228,7 @@ function appendResult(file, state, message, retry) {
 async function renderPendingQueue() {
   try {
     const records = await allPending();
-    if (!records.length) return;
+    if (!records.length || uploading) return;
     summary.hidden = false;
     summary.textContent = `재시도 대기 ${records.length}개`;
     records.forEach(record => appendResult(
@@ -207,24 +240,27 @@ async function renderPendingQueue() {
 
 async function uploadSelection(files, pendingIds = new Map()) {
   picker.value = '';
-  if (!files.length) return;
+  if (!files.length || uploading) return;
+  uploading = true;
+  clearButton.disabled = true;
   selectButton.disabled = true;
-  results.replaceChildren();
+  clearResults();
   summary.hidden = false;
   summary.textContent = `0/${files.length} 처리 중`;
-  const seen = new Set();
+  const seen = new Map();
   let success = 0, duplicate = 0, failed = 0, finished = 0;
   const jobs = files.map(file => async () => {
     let state = 'error', message = '';
     try {
       const hash = await sha256(file);
-      if (seen.has(hash)) {
-        state = 'duplicate'; message = '같은 선택 항목이 이미 있어 새 파일을 저장하지 않았습니다.'; duplicate++;
+      const repeated = seen.has(hash);
+      if (!repeated) seen.set(hash, toPayload(file).then(bridgeUpload));
+      const response = await seen.get(hash);
+      if (repeated) {
+        state = 'duplicate'; message = '같은 사진이 Drive에 저장되어 추가 전송하지 않았습니다.'; duplicate++;
       } else {
-        seen.add(hash);
-        const response = await bridgeUpload(await toPayload(file));
         if (response.status === 'duplicate') { state = 'duplicate'; message = '이미 등록된 이미지이므로 새 파일을 저장하지 않았습니다.'; duplicate++; }
-        else { state = 'success'; message = 'Drive 저장 완료. PC 실행 시 자동 처리됩니다.'; success++; }
+        else { state = 'success'; message = 'Drive 저장 완료. 켜져 있는 PC가 자동으로 가져와 분석합니다.'; success++; }
       }
       await removePending(pendingIds.get(file));
     } catch (error) {
@@ -239,6 +275,18 @@ async function uploadSelection(files, pendingIds = new Map()) {
   });
   let index = 0;
   async function worker() { while (index < jobs.length) { const job = jobs[index++]; await job(); } }
-  await Promise.all([worker(), worker()]);
-  selectButton.disabled = false;
+  try {
+    await Promise.all([worker(), worker()]);
+    // Retrying one photo must not hide the other failed photos.
+    const current = new Set(pendingIds.values());
+    const remaining = await allPending().catch(() => []);
+    remaining.filter(record => !current.has(record.id)).forEach(record => appendResult(
+      record.file, 'error', record.message,
+      () => uploadSelection([record.file], new Map([[record.file, record.id]]))
+    ));
+  } finally {
+    uploading = false;
+    clearButton.disabled = false;
+    selectButton.disabled = false;
+  }
 }

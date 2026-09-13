@@ -13,7 +13,14 @@ h1 { margin: 0 0 8px; font-size: 26px; }
 .help { margin: 12px 0 0; font-size: 14px; }
 .summary { margin-top: 20px; padding: 12px; border-radius: 10px; background: #eef4ff; font-weight: 700; }
 .results { margin: 14px 0 0; padding: 0; list-style: none; }
-.result { margin-top: 8px; padding: 12px; border: 1px solid #dde4ee; border-radius: 10px; }
+.result { display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; padding: 12px; border: 1px solid #dde4ee; border-radius: 10px; }
+.result-detail { min-width: 0; flex: 1; }
+.receipt-preview { flex: 0 0 84px; width: 84px; height: 112px; padding: 2px; background: white; border: 1px solid #bac6d8; border-radius: 8px; overflow: hidden; cursor: zoom-in; }
+.receipt-preview img { width: 100%; height: 100%; object-fit: contain; }
+.photo-dialog { max-width: 94vw; max-height: 94dvh; border: 0; border-radius: 12px; padding: 12px; }
+.photo-dialog::backdrop { background: #000b; }
+.photo-dialog img { display: block; max-width: 85vw; max-height: 78dvh; object-fit: contain; }
+.photo-dialog button { display: block; width: 100%; min-height: 44px; margin-top: 10px; }
 .result strong { display: block; overflow-wrap: anywhere; }
 .result p { margin: 5px 0 0; color: #526174; font-size: 14px; line-height: 1.4; }
 .retry { margin-top: 9px; padding: 8px 13px; border: 1px solid #bac6d8; border-radius: 8px; background: #fff; color: #27364f; font-weight: 700; }
